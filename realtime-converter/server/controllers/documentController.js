@@ -1,9 +1,10 @@
 const documentService = require("../services/documentService");
+const historyService = require("../services/historyService");
 const path = require("path");
 
 exports.convertDocument = async (req, res) => {
   try {
-    const { fileId, toFormat } = req.body;
+    const { fileId, toFormat, fromFormat } = req.body;
 
     if (!fileId || !toFormat) {
       return res.status(400).json({
@@ -34,6 +35,17 @@ exports.convertDocument = async (req, res) => {
           status: `Converting... ${percent}%`,
         });
       },
+    });
+
+    await historyService.addRecord({
+      fileId,
+      originalName: req.body.originalName || fileId,
+      fromFormat: fromFormat || "document",
+      toFormat,
+      type: "document",
+      endpoint: "document",
+      outputPath: `/converted/${outputFilename}`,
+      size: result.size,
     });
 
     io.emit("conversionProgress", {

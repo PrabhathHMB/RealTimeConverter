@@ -25,9 +25,11 @@ global.io = io;
 // Routes
 const uploadRoutes = require("./routes/uploadRoutes");
 const converterRoutes = require("./routes/converterRoutes");
+const historyRoutes = require("./routes/historyRoutes");
 
 app.use("/api/upload", uploadRoutes);
 app.use("/api/convert", converterRoutes);
+app.use("/api/history", historyRoutes);
 
 // Basic route
 app.get("/", (req, res) => {

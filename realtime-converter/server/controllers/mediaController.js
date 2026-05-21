@@ -1,4 +1,5 @@
 const mediaService = require("../services/mediaService");
+const historyService = require("../services/historyService");
 const path = require("path");
 
 exports.convertMedia = async (req, res) => {
@@ -22,6 +23,17 @@ exports.convertMedia = async (req, res) => {
       onProgress: (percent) => {
         io.emit("conversionProgress", { fileId, percent, status: `Converting... ${percent}%` });
       },
+    });
+
+    await historyService.addRecord({
+      fileId,
+      originalName: req.body.originalName || fileId,
+      fromFormat: req.body.fromFormat || "media",
+      toFormat,
+      type: "media",
+      endpoint: req.path.includes("audio") ? "audio" : "video",
+      outputPath: `/converted/${outputFilename}`,
+      size: result.size,
     });
 
     io.emit("conversionProgress", { fileId, percent: 100, status: "Completed!" });

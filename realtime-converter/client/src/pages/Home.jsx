@@ -1,10 +1,15 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { Link } from "react-router-dom";
 import axios from "axios";
 import io from "socket.io-client";
 import "../styles/Home.css";
 
 const API_URL = "http://localhost:5000/api";
-const socket = io("http://localhost:5000");
+const socket = io("http://localhost:5000", {
+  reconnectionAttempts: 10,
+  reconnectionDelay: 1000,
+  transports: ["websocket"],
+});
 
 export default function Home() {
   const [file, setFile] = useState(null);
@@ -14,16 +19,58 @@ export default function Home() {
   const [progress, setProgress] = useState(0);
   const [messages, setMessages] = useState([]);
   const [downloadUrl, setDownloadUrl] = useState(null);
+  const [socketStatus, setSocketStatus] = useState("disconnected");
+  const progressStyle = { width: progress + "%" };
 
-  // Listen for real-time progress updates
-  socket.on("conversionProgress", (data) => {
-    setProgress(data.percent);
-    addMessage(data.status);
-  });
-
-  const addMessage = (msg) => {
+  const addMessage = useCallback((msg) => {
     setMessages((prev) => [...prev, msg]);
-  };
+  }, []);
+
+  useEffect(() => {
+    const handleProgress = (data) => {
+      setProgress(data.percent);
+      addMessage(data.status);
+    };
+
+    const handleConnect = () => {
+      setSocketStatus("connected");
+      addMessage("Socket connected");
+    };
+
+    const handleDisconnect = (reason) => {
+      setSocketStatus("disconnected");
+      addMessage(`Socket disconnected (${reason})`);
+    };
+
+    const handleConnectError = (error) => {
+      addMessage(`Socket error: ${error.message}`);
+    };
+
+    const handleReconnectAttempt = (attempt) => {
+      addMessage(`Socket reconnect attempt ${attempt}`);
+    };
+
+    const handleReconnectFailed = () => {
+      setSocketStatus("failed");
+      addMessage("Socket reconnect failed");
+    };
+
+    socket.on("conversionProgress", handleProgress);
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
+    socket.on("connect_error", handleConnectError);
+    socket.on("reconnect_attempt", handleReconnectAttempt);
+    socket.on("reconnect_failed", handleReconnectFailed);
+
+    return () => {
+      socket.off("conversionProgress", handleProgress);
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
+      socket.off("connect_error", handleConnectError);
+      socket.off("reconnect_attempt", handleReconnectAttempt);
+      socket.off("reconnect_failed", handleReconnectFailed);
+    };
+  }, [addMessage]);
 
   const handleFileSelect = (e) => {
     if (e.target.files.length > 0) {
@@ -40,9 +87,9 @@ export default function Home() {
 
     try {
       setUploading(true);
+      setDownloadUrl(null);
       addMessage("📤 Uploading file...");
 
-      // Upload file
       const formData = new FormData();
       formData.append("file", file);
 
@@ -54,7 +101,6 @@ export default function Home() {
       addMessage(`✅ File uploaded: ${fileId}`);
       setUploading(false);
 
-      // Determine endpoint
       const mimeTop = file.type.split("/")[0];
       let endpoint = "image";
       if (mimeTop === "image") endpoint = "image";
@@ -62,13 +108,13 @@ export default function Home() {
       else if (mimeTop === "audio") endpoint = "audio";
       else if (["pdf", "docx", "txt", "pptx"].includes(toFormat)) endpoint = "document";
 
-      // Convert file
       setConverting(true);
       setProgress(0);
       addMessage(`🔄 Converting to ${toFormat} via ${endpoint}...`);
 
       const convertRes = await axios.post(`${API_URL}/convert/${endpoint}`, {
         fileId,
+        originalName: uploadRes.data.file.originalName,
         fromFormat: file.type.split("/")[1] || "unknown",
         toFormat,
         quality: 90,
@@ -92,9 +138,20 @@ export default function Home() {
 
   return (
     <div className="home-container">
-      <div className="header">
-        <h1>🎨 Real-Time Converter</h1>
-        <p>Convert your images, videos, audio & documents instantly</p>
+      <div className="header header-row">
+        <div>
+          <h1>🎨 Real-Time Converter</h1>
+          <p>Convert your images, videos, audio & documents instantly</p>
+        </div>
+
+        <div className="header-actions">
+          <Link to="/history" className="history-link">
+            View History
+          </Link>
+          <span className={`socket-status ${socketStatus}`}>
+            {socketStatus}
+          </span>
+        </div>
       </div>
 
       <div className="main-content">
@@ -155,7 +212,7 @@ export default function Home() {
         {(uploading || converting) && (
           <div className="progress-section">
             <div className="progress-bar">
-              <div className="progress-fill" style={{ width: `${progress}%` }}>
+              <div className="progress-fill" style={progressStyle}>
                 {progress}%
               </div>
             </div>

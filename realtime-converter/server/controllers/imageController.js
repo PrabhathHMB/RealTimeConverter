@@ -1,4 +1,5 @@
 const imageService = require("../services/imageService");
+const historyService = require("../services/historyService");
 const path = require("path");
 
 exports.convertImage = async (req, res) => {
@@ -35,6 +36,17 @@ exports.convertImage = async (req, res) => {
           status: `Converting... ${percent}%`,
         });
       },
+    });
+
+    await historyService.addRecord({
+      fileId,
+      originalName: req.body.originalName || fileId,
+      fromFormat,
+      toFormat,
+      type: "image",
+      endpoint: "image",
+      outputPath: `/converted/${outputFilename}`,
+      size: result.size,
     });
 
     io.emit("conversionProgress", {
