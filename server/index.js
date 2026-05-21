@@ -3,6 +3,10 @@ const cors = require("cors");
 const http = require("http");
 const { Server } = require("socket.io");
 
+const converterRoutes = require("./routes/converterRoutes");
+
+app.use("/api/converter", converterRoutes);
+
 const app = express();
 
 app.use(cors());
